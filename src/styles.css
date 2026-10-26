@@ -1,0 +1,246 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--on-primary);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-secondary: var(--surface);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--surface);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--primary-tint);
+  --color-accent-foreground: var(--primary);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--divider);
+  --color-input: var(--divider);
+  --color-ring: var(--primary);
+  --color-surface: var(--surface);
+  --color-divider: var(--divider);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-disabled: var(--disabled);
+  --font-sans: var(--app-font-body);
+  --font-display: var(--app-font-display);
+}
+
+:root {
+  --app-font-display: "Daylight", "Playfair Display", "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --app-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", system-ui, sans-serif;
+  --background: #ffffff;
+  --foreground: #000000;
+  --surface: #faf7f5;
+  --divider: #e8e2de;
+  --muted-foreground: #5f5753;
+  --disabled: #bdb5b0;
+  --primary: #a40507;
+  --primary-pressed: #7f0405;
+  --primary-tint: rgba(164, 5, 7, 0.1);
+  --on-primary: #ffffff;
+  --success: #2e7d32;
+  --warning: #f9a825;
+  --danger: #c62828;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --radius: 16px;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --surface: #1a1a1a;
+  --divider: #2c2c2c;
+  --muted-foreground: #c8c2be;
+  --disabled: #6e6864;
+  --primary: #d1292c;
+  --primary-pressed: #a40507;
+  --primary-tint: rgba(209, 41, 44, 0.16);
+  --on-primary: #ffffff;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--divider);
+  }
+
+  html,
+  body {
+    background: #e7e0da;
+    color: var(--foreground);
+    font-family: var(--app-font-body);
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dark body,
+  body:has(.dark) {
+    background: #000000;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.display {
+  font-family: var(--app-font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.diner-shadow {
+  box-shadow: var(--shadow);
+}
+
+.diner-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+@keyframes splash-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shine-sweep {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(240%) skewX(-18deg);
+  }
+}
+
+@keyframes tagline-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes push-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-check {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.anim-splash-logo {
+  animation: splash-pop 0.9s cubic-bezier(0.22, 1.25, 0.36, 1) both;
+}
+
+.anim-shine {
+  animation: shine-sweep 0.9s ease-in-out 0.85s both;
+}
+
+.anim-tagline {
+  animation: tagline-in 0.55s ease 1.7s both;
+}
+
+.anim-push {
+  animation: push-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.anim-sheet {
+  animation: sheet-in 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.anim-fade-up {
+  animation: fade-up 0.35s ease both;
+}
+
+.anim-check {
+  animation: pop-check 0.45s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
