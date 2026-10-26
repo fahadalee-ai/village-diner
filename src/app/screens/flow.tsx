@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { business } from "@/data/business";
 import { logo } from "@/lib/images";
-import { haptic, isEmail, isPhone, passwordLabel, passwordScore, prefersReducedMotion } from "@/lib/format";
+import { haptic, passwordLabel, passwordScore, prefersReducedMotion } from "@/lib/format";
 import { useApp } from "@/lib/store";
 import { useNav } from "@/app/nav";
 import { Field, FoodImage, PrimaryButton, Screen, SecondaryButton, TextButton, ToggleRow } from "@/components/ios";
@@ -159,23 +159,9 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [error, setError] = useState("");
 
   function submit() {
-    if (!isEmail(email)) {
-      setError("Enter the email on your account.");
-      return;
-    }
-    if (!password) {
-      setError("Enter your password.");
-      return;
-    }
-    const result = app.login(email, password);
-    if (!result.ok) {
-      setError(result.reason);
-      haptic("warn");
-      return;
-    }
+    app.login(email, password);
     haptic("success");
     nav.reset("home");
   }
@@ -203,7 +189,6 @@ export function Login() {
               </button>
             }
           />
-          {error ? <p className="px-1 text-[13px] text-danger">{error}</p> : null}
           <div className="flex justify-end">
             <TextButton onClick={() => nav.push("forgot")}>Forgot password?</TextButton>
           </div>
@@ -242,7 +227,6 @@ export function Login() {
           onClick={() => {
             setEmail("alex@email.com");
             setPassword("Diner123");
-            setError("");
           }}
         >
           Use preview account
@@ -263,24 +247,11 @@ export function Register() {
   const [birthday, setBirthday] = useState("");
   const [agree, setAgree] = useState(false);
   const [promo, setPromo] = useState(true);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const score = passwordScore(password);
   const strength = ["bg-divider", "bg-danger", "bg-warning", "bg-primary", "bg-success"][score] ?? "bg-divider";
 
   function submit() {
-    const next: Record<string, string> = {};
-    if (name.trim().length < 2) next.name = "Enter your full name.";
-    if (!isEmail(email)) next.email = "Enter a valid email.";
-    if (!isPhone(phone)) next.phone = "Enter a 10-digit mobile number.";
-    if (score < 2) next.password = "Use 8+ characters with mixed case or a number.";
-    if (!agree) next.agree = "Agree to the Terms and Privacy Policy to continue.";
-    setErrors(next);
-    if (Object.keys(next).length) return;
-    const result = app.register({ name, email, phone, password, birthday: birthday || undefined, promoOptIn: promo });
-    if (!result.ok) {
-      setErrors({ email: result.reason });
-      return;
-    }
+    app.register({ name, email, phone, password, birthday: birthday || undefined, promoOptIn: promo });
     haptic("success");
     nav.push("otp");
   }
@@ -299,9 +270,9 @@ export function Register() {
       <div className="space-y-5">
         <section className="space-y-3">
           <h2 className="text-[17px] font-semibold">Your details</h2>
-          <Field label="Full name" value={name} onChange={setName} autoComplete="name" error={errors.name} />
-          <Field label="Email" value={email} onChange={setEmail} type="email" autoComplete="email" inputMode="email" error={errors.email} />
-          <Field label="Mobile number" value={phone} onChange={setPhone} type="tel" autoComplete="tel" inputMode="tel" error={errors.phone} />
+          <Field label="Full name" value={name} onChange={setName} autoComplete="name" />
+          <Field label="Email" value={email} onChange={setEmail} type="email" autoComplete="email" inputMode="email" />
+          <Field label="Mobile number" value={phone} onChange={setPhone} type="tel" autoComplete="tel" inputMode="tel" />
         </section>
         <section className="space-y-3">
           <h2 className="text-[17px] font-semibold">Password</h2>
@@ -311,7 +282,6 @@ export function Register() {
             onChange={setPassword}
             type={show ? "text" : "password"}
             autoComplete="new-password"
-            error={errors.password}
             right={
               <button type="button" aria-label={show ? "Hide password" : "Show password"} onClick={() => setShow((value) => !value)} className="flex h-11 w-11 items-center justify-center">
                 <SFIcon name={show ? "eye.slash" : "eye"} size={18} />
@@ -354,7 +324,6 @@ export function Register() {
               .
             </p>
           </div>
-          {errors.agree ? <p className="mt-2 text-[13px] text-danger">{errors.agree}</p> : null}
           <div className="mt-2 border-t border-divider">
             <ToggleRow label="Promotions" detail="Occasional specials and rewards. Optional." checked={promo} onChange={setPromo} />
           </div>
@@ -373,20 +342,11 @@ export function Register() {
 export function Forgot() {
   const nav = useNav();
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
   return (
     <AuthFrame title="Forgot password" subtitle="Enter the email on your account. We'll send a reset link." onBack={() => nav.pop()}>
       <div className="space-y-4">
-        <Field label="Email" value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="email" error={error} />
-        <PrimaryButton
-          onClick={() => {
-            if (!isEmail(email)) {
-              setError("Enter a valid email.");
-              return;
-            }
-            nav.push("forgot-done", { email });
-          }}
-        >
+        <Field label="Email" value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="email" />
+        <PrimaryButton onClick={() => nav.push("forgot-done", { email })}>
           Send reset link
         </PrimaryButton>
       </div>
@@ -413,7 +373,6 @@ export function ResetPassword() {
   const email = nav.current.params?.email ?? "";
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [error, setError] = useState("");
   const score = passwordScore(password);
   const strength = ["bg-divider", "bg-danger", "bg-warning", "bg-primary", "bg-success"][score] ?? "bg-divider";
   return (
@@ -425,7 +384,6 @@ export function ResetPassword() {
           onChange={setPassword}
           type={show ? "text" : "password"}
           autoComplete="new-password"
-          error={error}
           right={
             <button type="button" aria-label={show ? "Hide password" : "Show password"} onClick={() => setShow((value) => !value)} className="flex h-11 w-11 items-center justify-center">
               <SFIcon name={show ? "eye.slash" : "eye"} size={18} />
@@ -442,13 +400,9 @@ export function ResetPassword() {
         </div>
         <PrimaryButton
           onClick={() => {
-            if (score < 2) {
-              setError("Use 8+ characters with mixed case or a number.");
-              return;
-            }
-            const ok = app.resetPassword(email, password);
+            app.resetPassword(email, password);
             haptic("success");
-            app.pushToast(ok ? "Password updated" : "If an account exists, it was updated");
+            app.pushToast("Password updated");
             nav.reset("login");
           }}
         >
@@ -463,7 +417,6 @@ export function Otp() {
   const nav = useNav();
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [seconds, setSeconds] = useState(30);
-  const [error, setError] = useState("");
   useEffect(() => {
     if (seconds <= 0) return;
     const timer = window.setTimeout(() => setSeconds((n) => n - 1), 1000);
@@ -498,14 +451,9 @@ export function Otp() {
             />
           ))}
         </div>
-        {error ? <p className="mt-3 text-[13px] text-danger">{error}</p> : null}
         <div className="mt-6">
           <PrimaryButton
             onClick={() => {
-              if (code.join("").length < 6) {
-                setError("Enter all 6 digits.");
-                return;
-              }
               haptic("success");
               nav.reset("home");
             }}

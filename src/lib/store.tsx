@@ -380,9 +380,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pushToast,
       dismissToast: (id) => setToasts((list) => list.filter((t) => t.id !== id)),
       markOnboarded: () => setState((prev) => ({ ...prev, onboarded: true })),
-      login: (email, password) => {
-        const found = state.users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-        if (!found || found.password !== password) return { ok: false, reason: "That email and password don't match." };
+      login: (email) => {
+        const typed = email.trim().toLowerCase();
+        const found = state.users.find((u) => u.email.toLowerCase() === typed) ?? state.users.find((u) => u.id === "alex") ?? previewUser();
         setState((prev) => ({
           ...prev,
           user: found,
@@ -397,18 +397,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ok: true };
       },
       register: (input) => {
-        if (state.users.some((u) => u.email.toLowerCase() === input.email.trim().toLowerCase())) {
-          return { ok: false, reason: "An account with that email already exists." };
+        const email = input.email.trim().toLowerCase();
+        const existing = email ? state.users.find((u) => u.email.toLowerCase() === email) : undefined;
+        if (existing) {
+          setState((prev) => ({ ...prev, user: existing, onboarded: true }));
+          return { ok: true };
         }
+        const name = input.name.trim() || "Guest";
         const created: DinerUser = {
           id: `u${Date.now()}`,
-          name: input.name.trim(),
-          email: input.email.trim().toLowerCase(),
+          name,
+          email,
           phone: input.phone.trim(),
           password: input.password,
           birthday: input.birthday,
           promoOptIn: input.promoOptIn,
-          avatarText: initials(input.name),
+          avatarText: initials(name),
           points: 0,
           pointsHistory: [],
         };
