@@ -159,8 +159,8 @@ export function CateringForm() {
 export function CateringDone() {
   const nav = useNav();
   return (
-    <Screen>
-      <div className="px-5 pt-16 text-center">
+    <Screen header={<NavBar title="Request sent" right={<button type="button" className="text-[17px] font-semibold text-primary" onClick={() => nav.reset("home")}>Done</button>} />}>
+      <div className="px-5 text-center">
         <span className="anim-check mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success text-white"><SFIcon name="checkmark" size={36} /></span>
         <h1 className="display mt-4 text-[28px]">Request sent</h1>
         <p className="mt-2 text-[16px] text-muted-foreground">The Village Diner will follow up about your quote. Sample prices are not a confirmation.</p>

@@ -59,18 +59,17 @@ const slides = [
 
 export function Splash() {
   const nav = useNav();
-  const { hydrated, onboarded } = useApp();
+  const { hydrated } = useApp();
   useEffect(() => {
     if (!hydrated) return;
     const delay = prefersReducedMotion() ? 400 : 2500;
     const timer = window.setTimeout(() => {
       if (business.maintenanceMode) nav.reset("maintenance");
       else if (business.forceUpdate) nav.reset("force-update");
-      else if (!onboarded) nav.reset("onboarding");
-      else nav.reset("home");
+      else nav.reset("onboarding");
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [hydrated, onboarded, nav]);
+  }, [hydrated, nav]);
 
   return (
     <div className="flex h-full flex-col items-center justify-center bg-primary px-8 text-center text-white">

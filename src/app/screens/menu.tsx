@@ -336,7 +336,7 @@ export function ItemScreen() {
       <div className="relative">
         <FoodImage folder="menu" file={item.image} alt={item.name} className="h-72 w-full" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        <div className="absolute left-3 right-3 top-[max(8px,env(safe-area-inset-top))] flex justify-between">
+        <div className="absolute left-3 right-3 top-[max(20px,env(safe-area-inset-top))] flex justify-between">
           <button type="button" aria-label="Close" onClick={() => nav.pop()} className="flex h-11 w-11 items-center justify-center rounded-full bg-background/90">
             <SFIcon name="xmark" />
           </button>

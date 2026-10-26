@@ -637,8 +637,8 @@ export function ConfirmScreen() {
     );
   }
   return (
-    <Screen>
-      <div className="px-5 pb-8 pt-[max(28px,env(safe-area-inset-top))]">
+    <Screen header={<NavBar title="Order placed" right={<button type="button" className="text-[17px] font-semibold text-primary" onClick={() => nav.reset("home")}>Done</button>} />}>
+      <div className="px-5 pb-8">
         <div className="text-center">
           <span className="anim-check mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success text-white">
             <SFIcon name="checkmark" size={36} />
@@ -712,23 +712,29 @@ export function TrackScreen() {
   }
   const index = order.status === "received" ? 0 : order.status === "preparing" ? 1 : order.status === "completed" ? 3 : 2;
   return (
-    <Screen header={<NavBar title={order.number} onBack={() => nav.pop()} />}>
-      <div className="space-y-5 px-5 pb-8">
+    <Screen
+      header={<NavBar title={order.number} onBack={() => nav.pop()} />}
+      footer={
+        <div className="grid grid-cols-2 gap-2 border-t border-divider bg-background px-5 py-3 pb-[max(20px,env(safe-area-inset-bottom))]">
+          <a href={`tel:${business.phoneTel}`} className="flex h-[52px] items-center justify-center rounded-[14px] bg-primary text-[17px] font-semibold text-white">Call diner</a>
+          <button type="button" onClick={() => nav.push("support")} className="h-[52px] rounded-[14px] border-2 border-primary text-[17px] font-semibold text-primary">Support</button>
+        </div>
+      }
+    >
+      <div className="space-y-5 px-5 pb-6">
         <StatusStepper steps={steps} current={index} />
-        <p className="text-center text-[16px] text-muted-foreground">{order.whenLabel}</p>
-        <MiniMap />
-        <ul className="space-y-2">
+        <p className="text-center text-[16px] text-muted-foreground">{prettyWhen(order.whenLabel)}</p>
+        <div className="overflow-hidden rounded-[16px]">
+          <MiniMap />
+        </div>
+        <ul className="space-y-3 rounded-[16px] bg-surface p-4">
           {order.lines.map((line) => (
-            <li key={line.id} className="flex justify-between text-[16px]">
+            <li key={line.id} className="flex justify-between gap-3 text-[16px]">
               <span>{line.qty} × {line.name}</span>
-              <span>{formatMoney(line.unitPrice * line.qty)}</span>
+              <span className="tabular-nums">{formatMoney(line.unitPrice * line.qty)}</span>
             </li>
           ))}
         </ul>
-        <div className="grid grid-cols-2 gap-2">
-          <a href={`tel:${business.phoneTel}`} className="flex h-11 items-center justify-center rounded-[14px] bg-primary font-semibold text-white">Call diner</a>
-          <button type="button" onClick={() => nav.push("support")} className="h-11 rounded-[14px] border-2 border-primary font-semibold text-primary">Support</button>
-        </div>
       </div>
     </Screen>
   );
@@ -784,7 +790,7 @@ export function OrderDetail() {
       }
     >
       <div className="space-y-3 px-5">
-        <p className="text-[16px] capitalize">{order.status.replace("delivering", "out for delivery")} · {order.whenLabel}</p>
+        <p className="text-[16px] capitalize">{order.status.replace("delivering", "out for delivery")} · {prettyWhen(order.whenLabel)}</p>
         {order.lines.map((line) => (
           <div key={line.id} className="flex gap-3">
             <FoodImage folder="menu" file={line.image} alt="" className="h-14 w-14 rounded-[12px]" />

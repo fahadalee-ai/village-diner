@@ -386,10 +386,20 @@ export function FoodImage({
   className?: string;
 }) {
   const src = imageSrc(folder, file);
-  if (!src) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (!src || failed) {
     return <div className={cn("bg-[#E7D5C8] dark:bg-[#2A211E]", className)} role="img" aria-label={alt} />;
   }
-  return <img src={src} alt={alt} className={cn("h-full w-full object-cover", className)} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      decoding="async"
+      className={cn("h-full w-full object-cover", className)}
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export function EmptyState({
@@ -459,7 +469,7 @@ export function Screen({
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       {header}
-      <div className="diner-scroll min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className={cn("diner-scroll min-h-0 flex-1 overflow-y-auto", header && "pt-5", !footer && "pb-[max(28px,env(safe-area-inset-bottom))]")}>{children}</div>
       {footer}
     </div>
   );
@@ -479,25 +489,27 @@ export function NavBar({
   subtitle?: string;
 }) {
   return (
-    <header className="bg-background px-5 pt-[max(8px,env(safe-area-inset-top))]">
-      <div className="flex h-11 items-center gap-1">
+    <header className="shrink-0 border-b border-divider bg-background px-4 pt-[max(28px,env(safe-area-inset-top))]">
+      <div className="relative flex h-11 items-center">
         {onBack ? (
-          <button type="button" aria-label="Back" onClick={onBack} className="-ml-2 flex h-11 items-center gap-0.5 pr-2 text-primary">
+          <button type="button" aria-label="Back" onClick={onBack} className="relative z-10 -ml-1 flex h-11 items-center gap-0.5 pr-2 text-primary">
             <SFIcon name="chevron.left" size={22} />
             <span className="text-[17px]">Back</span>
           </button>
         ) : (
-          <span />
+          <span className="w-11" />
         )}
-        {!large ? <h1 className="flex-1 truncate text-center text-[17px] font-semibold">{title}</h1> : <span className="flex-1" />}
-        <div className="flex min-w-11 justify-end">{right}</div>
+        {large ? null : <h1 className="pointer-events-none absolute inset-x-16 truncate text-center text-[17px] font-semibold">{title}</h1>}
+        <div className="relative z-10 ml-auto flex min-h-11 min-w-11 items-center justify-end">{right}</div>
       </div>
       {large ? (
-        <div className="pb-2 pt-1">
-          <h1 className="display text-[34px]">{title}</h1>
+        <div className="px-1 pb-4 pt-2">
+          <h1 className="display text-[34px] leading-tight">{title}</h1>
           {subtitle ? <p className="mt-1 text-[16px] text-muted-foreground">{subtitle}</p> : null}
         </div>
-      ) : null}
+      ) : (
+        <div className="h-2" />
+      )}
     </header>
   );
 }
