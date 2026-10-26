@@ -127,6 +127,18 @@
   box-shadow: var(--shadow);
 }
 
+.diner-scroll,
+.phone-frame,
+.phone-frame * {
+  scrollbar-width: none;
+}
+
+.diner-scroll::-webkit-scrollbar,
+.phone-frame::-webkit-scrollbar,
+.phone-frame *::-webkit-scrollbar {
+  display: none;
+}
+
 .diner-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;

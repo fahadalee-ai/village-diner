@@ -201,6 +201,31 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+type PayMethod = "card" | "saved" | "pickup";
+type CheckoutStep = "type" | "time" | "place" | "contact" | "pay" | "review";
+
+function clockLabel(value: string) {
+  const [hh, mm] = value.split(":").map(Number);
+  return new Date(2026, 0, 1, hh ?? 0, mm ?? 0).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function scheduleLabel(date: string, time: string) {
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0).toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function prettyWhen(label: string) {
+  const match = /^(\d{4}-\d{2}-\d{2}) at (\d{2}:\d{2})$/.exec(label);
+  return match ? scheduleLabel(match[1], match[2]) : label;
+}
+
 export function CheckoutScreen() {
   const nav = useNav();
   const app = useApp();
@@ -211,10 +236,11 @@ export function CheckoutScreen() {
   const [time, setTime] = useState(orderingWindow.start);
   const [addressId, setAddressId] = useState(app.addresses.find((a) => a.isDefault)?.id ?? app.addresses[0]?.id ?? "");
   const [addressOpen, setAddressOpen] = useState(false);
-  const [name, setName] = useState(app.user && !app.user.guest ? app.user.name : "");
-  const [phone, setPhone] = useState(app.user?.phone ?? "");
-  const [email, setEmail] = useState(app.user?.email ?? "");
-  const [pay, setPay] = useState<"apple" | "card" | "pickup" | "saved">("apple");
+  const registered = !!app.user && !app.user.guest && !!app.user.name && !!app.user.phone && !!app.user.email;
+  const [name, setName] = useState(registered ? app.user?.name ?? "" : "");
+  const [phone, setPhone] = useState(registered ? app.user?.phone ?? "" : "");
+  const [email, setEmail] = useState(registered ? app.user?.email ?? "" : "");
+  const [pay, setPay] = useState<PayMethod>(app.cards.length ? "saved" : "card");
   const [cardName, setCardName] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [exp, setExp] = useState("");
@@ -224,33 +250,49 @@ export function CheckoutScreen() {
   const subtotal = subtotalOf(app.cart);
   const tip = app.tipChoice === "custom" ? Math.max(0, Number(app.customTip) || 0) : moneyPercent(subtotal, Number(app.tipChoice));
   const summary = quote({ cart: app.cart, promoCode: app.promoCode, rewardId: app.rewardId, tip, delivery: type === "delivery" });
-  const whenLabel = when === "asap" ? "ASAP (15–25 min)" : `${date} at ${time}`;
-
-  const titles = ["Order type", "Time", "Details", "Contact", "Payment", "Review"];
+  const whenLabel = when === "asap" ? "ASAP (15–25 min)" : scheduleLabel(date, time);
+  const steps: CheckoutStep[] = registered ? ["type", "time", "place", "pay", "review"] : ["type", "time", "place", "contact", "pay", "review"];
+  const current = steps[step] ?? "type";
+  const titles: Record<CheckoutStep, string> = {
+    type: "Order type",
+    time: "Time",
+    place: "Details",
+    contact: "Contact",
+    pay: "Payment",
+    review: "Review",
+  };
+  const contact = registered
+    ? { name: app.user?.name ?? "", phone: app.user?.phone ?? "", email: app.user?.email ?? "" }
+    : { name: name.trim(), phone: phone.trim(), email: email.trim() };
 
   function next() {
     setError("");
-    if (step === 2 && type === "delivery" && !addressId) {
+    if (current === "time" && when === "later") {
+      if (!date) return setError("Choose a date.");
+      if (time < orderingWindow.start || time > orderingWindow.end) {
+        return setError(`Choose a time between ${clockLabel(orderingWindow.start)} and ${clockLabel(orderingWindow.end)}.`);
+      }
+    }
+    if (current === "place" && type === "delivery" && !addressId) {
       setError("Add a delivery address.");
       return;
     }
-    if (step === 3) {
+    if (current === "contact") {
       if (name.trim().length < 2) return setError("Enter the name for the order.");
       if (!isPhone(phone)) return setError("Enter a phone number.");
       if (!isEmail(email)) return setError("Enter an email for the receipt.");
     }
-    if (step === 4 && pay === "card") {
+    if (current === "pay" && pay === "card") {
       if (!luhnOk(cardNumber)) return setError("Enter a valid card number. No charge is placed in this preview.");
       if (!/^\d{2}\/\d{2}$/.test(exp)) return setError("Use an expiration like 08/28.");
       if (cvc.length < 3) return setError("Enter the security code.");
     }
-    if (step === 4 && pay === "saved" && !savedCard) return setError("Choose a saved card or another way to pay.");
-    if (step < 5) setStep((n) => n + 1);
+    if (current === "pay" && pay === "saved" && !savedCard) return setError("Choose a saved card or pay at pickup.");
+    if (step < steps.length - 1) setStep((n) => n + 1);
     else place();
   }
 
   function paymentLabel() {
-    if (pay === "apple") return "Apple Pay";
     if (pay === "pickup") return "Pay at pickup";
     if (pay === "saved") {
       const card = app.cards.find((c) => c.id === savedCard);
@@ -268,7 +310,7 @@ export function CheckoutScreen() {
     const order = app.placeOrder({
       type,
       whenLabel,
-      contact: { name: name.trim(), phone: phone.trim(), email: email.trim() },
+      contact,
       address: type === "delivery" && address ? `${address.line1}, ${address.city}, ${address.state} ${address.zip}` : business.address,
       paymentLabel: paymentLabel(),
       tip,
@@ -279,55 +321,60 @@ export function CheckoutScreen() {
       app.saveCard({ id: `card${Date.now()}`, brand: cardBrand(cardNumber), last4: cardNumber.replace(/\D/g, "").slice(-4), exp });
     }
     haptic("success");
-    app.pushToast("Order placed", `Receipt sent to ${email.trim()}`);
+    app.pushToast("Order placed", contact.email ? `Receipt sent to ${contact.email}` : "We'll see you at the diner.");
     nav.push("confirm", { id: order.id });
   }
 
+  const last = step === steps.length - 1;
+  const masked = cardNumber.replace(/\D/g, "");
+
   return (
     <Screen
-      header={<NavBar title={titles[step] ?? "Checkout"} onBack={() => (step === 0 ? nav.pop() : setStep((n) => n - 1))} />}
+      header={<NavBar title={titles[current]} onBack={() => (step === 0 ? nav.pop() : setStep((n) => n - 1))} />}
       footer={
-        <div className="border-t border-divider px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
-          <PrimaryButton onClick={next}>{step === 5 ? `Place order – ${formatMoney(summary.total)}` : "Continue"}</PrimaryButton>
+        <div className="border-t border-divider bg-background px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+          <div className="mb-2 flex items-center justify-between text-[15px]">
+            <span className="text-muted-foreground">{app.cartCount} {app.cartCount === 1 ? "item" : "items"}</span>
+            <span className="font-semibold tabular-nums">{formatMoney(summary.total)}</span>
+          </div>
+          <PrimaryButton onClick={next}>{last ? `Place order – ${formatMoney(summary.total)}` : "Continue"}</PrimaryButton>
         </div>
       }
     >
       <div className="px-5 pb-6">
-        <div className="mb-4 flex gap-1">
-          {titles.map((title, index) => (
-            <span key={title} className={index <= step ? "h-1 flex-1 rounded-full bg-primary" : "h-1 flex-1 rounded-full bg-divider"} />
+        <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">Step {step + 1} of {steps.length}</p>
+        <div className="mb-5 flex gap-1">
+          {steps.map((id, index) => (
+            <span key={id} className={index <= step ? "h-1.5 flex-1 rounded-full bg-primary" : "h-1.5 flex-1 rounded-full bg-divider"} />
           ))}
         </div>
         {error ? <p className="mb-3 text-[15px] text-danger">{error}</p> : null}
-        {step === 0 ? (
+        {current === "type" ? (
           <div className="space-y-3">
-            <Segmented
-              ariaLabel="Order type"
-              value={type}
-              onChange={(value) => {
-                setType(value);
-                app.setOrderMode(value);
+            <h2 className="display text-[28px] leading-tight">How do you want it?</h2>
+            <ChoiceCard active={type === "pickup"} icon="takeout" title="Pickup" body="Ready at the diner on North Keswick Avenue." onClick={() => { setType("pickup"); app.setOrderMode("pickup"); }} />
+            <ChoiceCard
+              active={type === "delivery"}
+              icon="mappin"
+              title="Delivery"
+              body={app.deliveryAvailable ? "We'll bring it to a saved address." : "Delivery availability to be confirmed by the restaurant."}
+              disabled={!app.deliveryAvailable}
+              onClick={() => {
+                if (!app.deliveryAvailable) return;
+                setType("delivery");
+                app.setOrderMode("delivery");
+                if (pay === "pickup") setPay(app.cards.length ? "saved" : "card");
               }}
-              options={[
-                { id: "pickup", label: "Pickup" },
-                { id: "delivery", label: "Delivery", disabled: !app.deliveryAvailable },
-              ]}
             />
-            <p className="text-[15px] text-muted-foreground">Delivery availability to be confirmed by the restaurant. Pickup is ready now.</p>
           </div>
         ) : null}
-        {step === 1 ? (
+        {current === "time" ? (
           <div className="space-y-3">
-            <button type="button" onClick={() => setWhen("asap")} className={when === "asap" ? "w-full rounded-[16px] bg-primary/10 p-4 text-left" : "w-full rounded-[16px] bg-surface p-4 text-left"}>
-              <span className="block text-[17px] font-semibold">ASAP (15–25 min)</span>
-              <span className="text-[15px] text-muted-foreground">We'll start it as soon as the ticket prints.</span>
-            </button>
-            <button type="button" onClick={() => setWhen("later")} className={when === "later" ? "w-full rounded-[16px] bg-primary/10 p-4 text-left" : "w-full rounded-[16px] bg-surface p-4 text-left"}>
-              <span className="block text-[17px] font-semibold">Schedule for later</span>
-              <span className="text-[15px] text-muted-foreground">Placeholder window {orderingWindow.start}–{orderingWindow.end} until hours are confirmed.</span>
-            </button>
+            <h2 className="display text-[28px] leading-tight">When should we make it?</h2>
+            <ChoiceCard active={when === "asap"} icon="clock" title="ASAP (15–25 min)" body="We'll start it as soon as the ticket prints." onClick={() => setWhen("asap")} />
+            <ChoiceCard active={when === "later"} icon="calendar" title="Schedule for later" body={`Placeholder window ${clockLabel(orderingWindow.start)}–${clockLabel(orderingWindow.end)} until hours are confirmed.`} onClick={() => setWhen("later")} />
             {when === "later" ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 rounded-[16px] bg-surface p-4">
                 <label className="text-[13px] text-muted-foreground">
                   Date
                   <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1 h-12 w-full rounded-[14px] border border-divider bg-background px-3 text-[16px] text-foreground" />
@@ -336,78 +383,106 @@ export function CheckoutScreen() {
                   Time
                   <input type="time" min={orderingWindow.start} max={orderingWindow.end} value={time} onChange={(event) => setTime(event.target.value)} className="mt-1 h-12 w-full rounded-[14px] border border-divider bg-background px-3 text-[16px] text-foreground" />
                 </label>
+                <p className="col-span-2 text-[16px] font-semibold">{scheduleLabel(date, time)}</p>
               </div>
             ) : null}
           </div>
         ) : null}
-        {step === 2 ? (
+        {current === "place" ? (
           type === "pickup" ? (
-            <div className="rounded-[16px] bg-surface p-4">
-              <p className="text-[13px] font-semibold uppercase tracking-wide text-primary">Pickup</p>
-              <p className="mt-1 text-[17px] font-semibold">{business.name}</p>
-              <p className="text-[16px]">{business.address}</p>
-              <MiniMap />
-              <a href={directionsUrl} className="mt-3 inline-flex text-[16px] font-semibold text-primary">Open in Apple Maps</a>
+            <div className="space-y-3">
+              <h2 className="display text-[28px] leading-tight">Pickup at the diner</h2>
+              <div className="overflow-hidden rounded-[16px] bg-surface">
+                <MiniMap />
+                <div className="p-4">
+                  <p className="text-[17px] font-semibold">{business.name}</p>
+                  <p className="mt-1 text-[16px] leading-snug">{business.address}</p>
+                  <p className="mt-2 text-[15px] text-muted-foreground">{whenLabel}</p>
+                  <a href={directionsUrl} className="mt-3 inline-flex min-h-11 items-center text-[16px] font-semibold text-primary">Open in Apple Maps</a>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
+              <h2 className="display text-[28px] leading-tight">Where should we deliver?</h2>
               {app.addresses.map((address) => (
-                <button key={address.id} type="button" onClick={() => setAddressId(address.id)} className={address.id === addressId ? "w-full rounded-[16px] bg-primary/10 p-4 text-left" : "w-full rounded-[16px] bg-surface p-4 text-left"}>
+                <button key={address.id} type="button" onClick={() => setAddressId(address.id)} className={address.id === addressId ? "w-full rounded-[16px] border-2 border-primary bg-primary/10 p-4 text-left" : "w-full rounded-[16px] border-2 border-transparent bg-surface p-4 text-left"}>
                   <span className="block text-[17px] font-semibold">{address.label}{address.isDefault ? " · Default" : ""}</span>
-                  <span className="text-[15px] text-muted-foreground">{address.line1}, {address.city}</span>
+                  <span className="text-[15px] text-muted-foreground">{address.line1}, {address.city}, {address.state} {address.zip}</span>
                 </button>
               ))}
               <SecondaryButton onClick={() => setAddressOpen(true)}>Add address</SecondaryButton>
             </div>
           )
         ) : null}
-        {step === 3 ? (
+        {current === "contact" ? (
           <div className="space-y-3">
+            <h2 className="display text-[28px] leading-tight">How can we reach you?</h2>
+            <p className="text-[16px] leading-relaxed text-muted-foreground">Guest checkout. We only use this for the order and the receipt.</p>
             <Field label="Name" value={name} onChange={setName} autoComplete="name" />
             <Field label="Phone" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
             <Field label="Email" value={email} onChange={setEmail} type="email" inputMode="email" />
-            {!app.user || app.user.guest ? <p className="text-[13px] text-muted-foreground">Guest checkout. We'll use this only for the order.</p> : null}
           </div>
         ) : null}
-        {step === 4 ? (
+        {current === "pay" ? (
           <div className="space-y-3">
-            <PayChoice active={pay === "apple"} onClick={() => setPay("apple")} label="Apple Pay" icon="apple" />
-            <PayChoice active={pay === "card"} onClick={() => setPay("card")} label="Credit or debit card" icon="creditcard" />
-            {app.cards.length ? <PayChoice active={pay === "saved"} onClick={() => setPay("saved")} label="Saved card" icon="creditcard" /> : null}
-            {type === "pickup" ? <PayChoice active={pay === "pickup"} onClick={() => setPay("pickup")} label="Pay at pickup" icon="takeout" /> : null}
-            {pay === "card" ? (
+            <h2 className="display text-[28px] leading-tight">How would you like to pay?</h2>
+            {app.cards.length ? (
               <div className="space-y-2">
-                <Field label="Name on card" value={cardName} onChange={setCardName} />
-                <Field label="Card number" value={cardNumber} onChange={setCardNumber} inputMode="numeric" />
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="MM/YY" value={exp} onChange={setExp} />
-                  <Field label="CVC" value={cvc} onChange={setCvc} inputMode="numeric" />
-                </div>
-              </div>
-            ) : null}
-            {pay === "saved" ? (
-              <div className="space-y-2">
+                <p className="text-[15px] font-semibold text-muted-foreground">Saved cards</p>
                 {app.cards.map((card) => (
-                  <button key={card.id} type="button" onClick={() => setSavedCard(card.id)} className="flex min-h-11 w-full items-center justify-between rounded-[14px] bg-surface px-3 text-left">
-                    {card.brand} •••• {card.last4}
-                    {savedCard === card.id ? <SFIcon name="checkmark" size={16} /> : null}
+                  <button key={card.id} type="button" onClick={() => { setPay("saved"); setSavedCard(card.id); }} className={pay === "saved" && savedCard === card.id ? "flex min-h-[64px] w-full items-center justify-between rounded-[16px] border-2 border-primary bg-primary/10 px-4 text-left" : "flex min-h-[64px] w-full items-center justify-between rounded-[16px] border-2 border-transparent bg-surface px-4 text-left"}>
+                    <span>
+                      <span className="block text-[17px] font-semibold">{card.brand} •••• {card.last4}</span>
+                      <span className="text-[13px] text-muted-foreground">Exp {card.exp}</span>
+                    </span>
+                    {pay === "saved" && savedCard === card.id ? <SFIcon name="checkmark" size={18} /> : null}
                   </button>
                 ))}
               </div>
             ) : null}
+            <ChoiceCard active={pay === "card"} icon="creditcard" title="Credit or debit card" body="Enter a new card. This preview does not charge it." onClick={() => setPay("card")} />
+            {pay === "card" ? (
+              <div className="space-y-3 rounded-[16px] bg-surface p-4">
+                <div className="rounded-[16px] bg-foreground p-4 text-background">
+                  <p className="text-[13px] text-background/70">Card number</p>
+                  <p className="mt-1 text-[20px] tracking-[0.12em]">{masked ? masked.replace(/(\d{4})(?=\d)/g, "$1 ").trim() : "•••• •••• •••• ••••"}</p>
+                  <div className="mt-4 flex justify-between text-[15px]">
+                    <span>{cardName || "Name on card"}</span>
+                    <span>{exp || "MM/YY"}</span>
+                  </div>
+                </div>
+                <Field label="Name on card" value={cardName} onChange={setCardName} autoComplete="cc-name" />
+                <Field label="Card number" value={cardNumber} onChange={(value) => setCardNumber(value.replace(/\D/g, "").slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ").trim())} inputMode="numeric" autoComplete="cc-number" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="MM/YY" value={exp} onChange={(value) => { const digits = value.replace(/\D/g, "").slice(0, 4); setExp(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits); }} autoComplete="cc-exp" />
+                  <Field label="CVC" value={cvc} onChange={(value) => setCvc(value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" autoComplete="cc-csc" />
+                </div>
+              </div>
+            ) : null}
+            {type === "pickup" ? <ChoiceCard active={pay === "pickup"} icon="takeout" title="Pay at pickup" body="Pay when you collect the order at the counter." onClick={() => setPay("pickup")} /> : null}
             <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <SFIcon name="lock" size={14} /> Secure payment. This preview does not charge a card.
+              <SFIcon name="lock" size={14} /> Secure payment. Full card numbers are not stored.
             </p>
           </div>
         ) : null}
-        {step === 5 ? (
-          <div className="space-y-3">
-            <p className="text-[16px]">{type === "delivery" ? "Delivery" : "Pickup"} · {whenLabel}</p>
-            <ul className="space-y-2">
+        {current === "review" ? (
+          <div className="space-y-4">
+            <h2 className="display text-[28px] leading-tight">Review your order</h2>
+            <div className="rounded-[16px] bg-surface p-4">
+              <p className="text-[13px] font-semibold uppercase tracking-wide text-primary">{type === "delivery" ? "Delivery" : "Pickup"}</p>
+              <p className="mt-1 text-[17px] font-semibold">{whenLabel}</p>
+              <p className="text-[15px] text-muted-foreground">{type === "delivery" ? (app.addresses.find((a) => a.id === addressId)?.line1 ?? "Add an address") : business.address}</p>
+            </div>
+            <ul className="space-y-3">
               {app.cart.map((line) => (
-                <li key={line.id} className="flex justify-between gap-3 text-[16px]">
-                  <span>{line.qty} × {line.name}</span>
-                  <span className="tabular-nums">{formatMoney(line.unitPrice * line.qty)}</span>
+                <li key={line.id} className="flex gap-3">
+                  <FoodImage folder="menu" file={line.image} alt="" className="h-16 w-16 rounded-[12px]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[16px] font-semibold">{line.qty} × {line.name}</p>
+                    {line.optionsLabel ? <p className="line-clamp-2 text-[13px] text-muted-foreground">{line.optionsLabel}</p> : null}
+                  </div>
+                  <span className="text-[16px] font-semibold tabular-nums">{formatMoney(line.unitPrice * line.qty)}</span>
                 </li>
               ))}
             </ul>
@@ -430,9 +505,16 @@ export function CheckoutScreen() {
                 </div>
               ) : null}
             </div>
-            <Summary summary={summary} delivery={type === "delivery"} />
-            <p className="text-[15px] text-muted-foreground">{name} · {phone} · {email}</p>
-            <p className="text-[15px] text-muted-foreground">{paymentLabel()}</p>
+            <div className="rounded-[16px] bg-surface p-4">
+              <Summary summary={summary} delivery={type === "delivery"} />
+            </div>
+            <div className="rounded-[16px] bg-surface p-4">
+              <p className="text-[13px] font-semibold uppercase tracking-wide text-primary">{registered ? "Ordering as" : "Guest"}</p>
+              <p className="mt-1 text-[17px] font-semibold">{contact.name}</p>
+              <p className="text-[15px] text-muted-foreground">{contact.phone}</p>
+              <p className="text-[15px] text-muted-foreground">{contact.email}</p>
+              <p className="mt-2 text-[16px] font-semibold">{paymentLabel()}</p>
+            </div>
           </div>
         ) : null}
       </div>
@@ -441,11 +523,30 @@ export function CheckoutScreen() {
   );
 }
 
-function PayChoice({ active, label, onClick, icon }: { active: boolean; label: string; onClick: () => void; icon: "apple" | "creditcard" | "takeout" }) {
+function ChoiceCard({
+  active,
+  title,
+  body,
+  icon,
+  onClick,
+  disabled,
+}: {
+  active: boolean;
+  title: string;
+  body: string;
+  icon: "takeout" | "mappin" | "clock" | "calendar" | "creditcard";
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <button type="button" onClick={onClick} className={active ? "flex h-[52px] w-full items-center gap-3 rounded-[14px] bg-primary px-4 text-left text-[17px] font-semibold text-white" : "flex h-[52px] w-full items-center gap-3 rounded-[14px] bg-surface px-4 text-left text-[17px] font-semibold"}>
-      <SFIcon name={icon} size={18} />
-      {label}
+    <button type="button" disabled={disabled} onClick={onClick} className={active ? "flex w-full items-start gap-3 rounded-[16px] border-2 border-primary bg-primary/10 p-4 text-left" : "flex w-full items-start gap-3 rounded-[16px] border-2 border-transparent bg-surface p-4 text-left disabled:opacity-50"}>
+      <span className={active ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white" : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-primary"}>
+        <SFIcon name={icon} size={20} />
+      </span>
+      <span>
+        <span className="block text-[17px] font-semibold">{title}</span>
+        <span className="mt-0.5 block text-[15px] leading-snug text-muted-foreground">{body}</span>
+      </span>
     </button>
   );
 }
@@ -459,7 +560,7 @@ function MiniMap() {
   const latRad = (lat * Math.PI) / 180;
   const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
   return (
-    <div className="relative mt-3 h-32 overflow-hidden rounded-[16px]">
+    <div className="relative h-40 overflow-hidden">
       <img alt="Map of The Village Diner on North Keswick Avenue" className="h-full w-full object-cover" src={`https://tile.openstreetmap.org/${z}/${x}/${y}.png`} />
       <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full text-primary">
         <SFIcon name="mappin" size={28} />
@@ -537,24 +638,47 @@ export function ConfirmScreen() {
   }
   return (
     <Screen>
-      <div className="px-5 pb-8 pt-[max(28px,env(safe-area-inset-top))] text-center">
-        <span className="anim-check mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success text-white">
-          <SFIcon name="checkmark" size={36} />
-        </span>
-        <h1 className="display mt-4 text-[28px]">Order placed</h1>
-        <p className="mt-1 text-[16px] text-muted-foreground">{order.number}</p>
-        <p className="mt-2 text-[17px] font-semibold">{order.whenLabel}</p>
-        <p className="text-[16px] text-muted-foreground">{order.type === "delivery" ? order.address : business.address}</p>
-        <ul className="mt-4 space-y-1 text-left text-[16px]">
-          {order.lines.map((line) => (
-            <li key={line.id} className="flex justify-between">
-              <span>{line.qty} × {line.name}</span>
-              <span>{formatMoney(line.unitPrice * line.qty)}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-[17px] font-semibold">Total {formatMoney(order.total)}</p>
-        <div className="mt-6 space-y-2">
+      <div className="px-5 pb-8 pt-[max(28px,env(safe-area-inset-top))]">
+        <div className="text-center">
+          <span className="anim-check mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success text-white">
+            <SFIcon name="checkmark" size={36} />
+          </span>
+          <h1 className="display mt-4 text-[34px] leading-tight">Order placed</h1>
+          <p className="mt-2 text-[16px] text-muted-foreground">We'll have it ready for you.</p>
+        </div>
+        <article className="diner-shadow mt-6 overflow-hidden rounded-[16px] bg-surface">
+          <div className="bg-primary px-4 py-5 text-center text-white">
+            <p className="text-[13px] font-semibold uppercase tracking-wide">The Village Diner</p>
+            <p className="display mt-1 text-[32px] leading-none text-white">{order.number}</p>
+            <p className="mt-2 text-[16px]">{order.type === "delivery" ? "Delivery" : "Pickup"} · {prettyWhen(order.whenLabel)}</p>
+          </div>
+          <div className="space-y-4 p-4">
+            <p className="text-[16px] leading-snug">{order.type === "delivery" ? order.address : business.address}</p>
+            <ul className="space-y-3 border-t border-dashed border-divider pt-4">
+              {order.lines.map((line) => (
+                <li key={line.id} className="flex gap-3">
+                  <FoodImage folder="menu" file={line.image} alt="" className="h-14 w-14 rounded-[12px]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[16px] font-semibold">{line.qty} × {line.name}</p>
+                    {line.optionsLabel ? <p className="line-clamp-2 text-[13px] text-muted-foreground">{line.optionsLabel}</p> : null}
+                  </div>
+                  <span className="text-[16px] tabular-nums">{formatMoney(line.unitPrice * line.qty)}</span>
+                </li>
+              ))}
+            </ul>
+            <dl className="space-y-1 border-t border-divider pt-3 text-[16px]">
+              <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd className="tabular-nums">{formatMoney(order.subtotal)}</dd></div>
+              {order.discount ? <div className="flex justify-between"><dt className="text-muted-foreground">Discount</dt><dd className="tabular-nums">-{formatMoney(order.discount)}</dd></div> : null}
+              <div className="flex justify-between"><dt className="text-muted-foreground">Tax</dt><dd className="tabular-nums">{formatMoney(order.tax)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Tip</dt><dd className="tabular-nums">{formatMoney(order.tip)}</dd></div>
+              {order.fee ? <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd className="tabular-nums">{formatMoney(order.fee)}</dd></div> : null}
+              <div className="flex justify-between border-t border-divider pt-2 text-[17px] font-semibold"><dt>Total</dt><dd className="tabular-nums">{formatMoney(order.total)}</dd></div>
+            </dl>
+            <p className="text-[15px] text-muted-foreground">{order.paymentLabel}</p>
+            <p className="text-[15px] text-muted-foreground">{order.contact.name} · {order.contact.phone}</p>
+          </div>
+        </article>
+        <div className="mt-6 space-y-3">
           <PrimaryButton onClick={() => nav.push("track", { id: order.id })}>Track Order</PrimaryButton>
           <SecondaryButton
             onClick={() => {

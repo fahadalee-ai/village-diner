@@ -508,7 +508,7 @@ export function PhoneFrame({ children, className }: { children: ReactNode; class
   const [node, setNode] = useState<HTMLElement | null>(null);
   return (
     <OverlayHost.Provider value={node}>
-      <div ref={setNode} className={cn("relative mx-auto h-dvh w-full max-w-[430px] overflow-hidden bg-background shadow-[0_12px_40px_rgba(0,0,0,0.12)]", className)}>
+      <div ref={setNode} className={cn("phone-frame relative mx-auto h-dvh w-full max-w-[430px] overflow-hidden bg-background shadow-[0_12px_40px_rgba(0,0,0,0.12)]", className)}>
         {children}
       </div>
     </OverlayHost.Provider>
